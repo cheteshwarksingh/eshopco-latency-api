@@ -16,6 +16,8 @@ app.add_middleware(
 )
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "telemetry.json"
+if not DATA_PATH.exists():
+    DATA_PATH = Path.cwd() / "telemetry.json"
 with DATA_PATH.open("r", encoding="utf-8") as f:
     TELEMETRY = json.load(f)
 
