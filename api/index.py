@@ -8,12 +8,14 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 def load_telemetry():
