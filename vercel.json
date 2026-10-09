@@ -1,1 +1,7 @@
-{}
+{
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "telemetry.json"
+    }
+  }
+}
