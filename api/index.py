@@ -50,7 +50,7 @@ def percentile(values, p=0.95):
     )
 
 
-@app.post("/api")
+@app.post("/")
 async def latency_metrics(request: Request):
     try:
         payload = await request.json()
