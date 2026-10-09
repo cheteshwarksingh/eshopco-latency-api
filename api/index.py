@@ -1,3 +1,4 @@
+
 import json
 import math
 from pathlib import Path
@@ -8,25 +9,24 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-
+# Allow requests from any origin, including POST and OPTIONS.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=False,
 )
 
 
-
 def load_telemetry():
-    candidates = [
+    possible_paths = [
         Path(__file__).resolve().parent.parent / "telemetry.json",
         Path(__file__).resolve().parent / "telemetry.json",
         Path.cwd() / "telemetry.json",
     ]
 
-    for path in candidates:
+    for path in possible_paths:
         if path.is_file():
             with path.open("r", encoding="utf-8") as file:
                 return json.load(file)
@@ -34,13 +34,13 @@ def load_telemetry():
     raise FileNotFoundError("telemetry.json not found")
 
 
-def percentile(values, p=0.95):
+def calculate_percentile(values, percentile=0.95):
     values = sorted(values)
 
     if not values:
         return None
 
-    position = (len(values) - 1) * p
+    position = (len(values) - 1) * percentile
     lower = math.floor(position)
     upper = math.ceil(position)
 
@@ -49,7 +49,8 @@ def percentile(values, p=0.95):
 
     return (
         values[lower]
-        + (values[upper] - values[lower]) * (position - lower)
+        + (values[upper] - values[lower])
+        * (position - lower)
     )
 
 
@@ -67,11 +68,18 @@ async def latency_metrics(request: Request):
         regions = payload.get("regions", [])
         threshold_ms = float(payload.get("threshold_ms", 180))
 
-        if not isinstance(regions, list) or not all(
-            isinstance(region, str) for region in regions
+        if (
+            not isinstance(regions, list)
+            or not all(isinstance(region, str) for region in regions)
         ):
             return JSONResponse(
                 {"error": "'regions' must be a list of strings"},
+                status_code=400,
+            )
+
+        if not math.isfinite(threshold_ms):
+            return JSONResponse(
+                {"error": "threshold_ms must be a finite number"},
                 status_code=400,
             )
 
@@ -83,9 +91,9 @@ async def latency_metrics(request: Request):
 
     try:
         telemetry = load_telemetry()
-    except (FileNotFoundError, json.JSONDecodeError) as error:
+    except (FileNotFoundError, json.JSONDecodeError):
         return JSONResponse(
-            {"error": f"Unable to load telemetry data: {error}"},
+            {"error": "Unable to load telemetry data"},
             status_code=500,
         )
 
@@ -106,12 +114,16 @@ async def latency_metrics(request: Request):
             }
             continue
 
-        latencies = [float(row["latency_ms"]) for row in rows]
-        uptimes = [float(row["uptime_pct"]) for row in rows]
+        latencies = [
+            float(row["latency_ms"]) for row in rows
+        ]
+        uptimes = [
+            float(row["uptime_pct"]) for row in rows
+        ]
 
         result[region] = {
             "avg_latency": sum(latencies) / len(latencies),
-            "p95_latency": percentile(latencies, 0.95),
+            "p95_latency": calculate_percentile(latencies),
             "avg_uptime": sum(uptimes) / len(uptimes),
             "breaches": sum(
                 latency > threshold_ms for latency in latencies
